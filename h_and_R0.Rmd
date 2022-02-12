@@ -1,0 +1,140 @@
+---
+title: "Steepness and R0"
+author: "Alberto Rovellini"
+date: "9/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(FishLife)
+library(kableExtra)
+```
+
+```{r}
+select <- dplyr::select
+```
+
+# h
+
+Use `FishLife` to extract values of steepness h based on taxonomy for all GOA fish species. See details [here](https://github.com/James-Thorson-NOAA/FishLife) and in [Thorson et al. (2014)](https://esajournals.onlinelibrary.wiley.com/doi/full/10.1890/12-1855.1). For an application of `FishLife`, see [Thorson (2020)](https://onlinelibrary.wiley.com/doi/full/10.1111/faf.12427). For discussion on working out $h$ from meta-analytical approaches, see [Punt and Dorn (2014)](https://www.sciencedirect.com/science/article/pii/S0165783613002257?via%3Dihub).
+
+We want scientific name, common name, and corresponding Atlantis group. It could be good to have the family too. Start from RACE-GAP species records, those will include most of the fish we need. 
+```{r, results=FALSE, include=FALSE}
+species <- read.csv('RACE_species_goa_Atlantis_Nov162021.csv')
+
+# read in Atantis groups
+atlantis_groups <- read.csv('GOA_Groups.csv', fileEncoding = 'UTF-8-BOM')
+atlantis_groups <- atlantis_groups %>% select(Code,Name)
+
+# join to species
+species <- species %>% left_join(atlantis_groups, by=c('Atlantis.group'='Code'))
+
+species <- species %>% select(Atlantis.group,Name,Common.Name,Scientific.Name)
+
+# some of the species names do not match between the RACE GAP species and FishLife, including some very important ones
+# like pollock. If we flag these instances, change them manually.
+
+species$Scientific.Name <- gsub('Gadus chalcogrammus','Theragra chalcogramma',species$Scientific.Name)
+
+
+# subset to entries where there is at least genus and species name. Assumes these will be the first two words in the species name column
+species <- species %>% rowwise() %>% mutate(Genus=word(Scientific.Name,1),
+                                            Species=word(Scientific.Name,2)) %>%
+  ungroup() %>%
+  select(-Scientific.Name) %>%
+  distinct() %>%
+  drop_na()
+
+get_h <- function(Genus,Species){
+  if(Species == 'sp.'){
+    vals <- Plot_taxa( Search_species(Genus=Genus)$match_taxonomy)
+  } else {
+    vals <- Plot_taxa( Search_species(Genus=Genus,Species=Species)$match_taxonomy)
+  }
+  this_h <- vals[[1]]$Mean_pred[13]
+  return(this_h)
+}
+
+species <- species %>% mutate(h=purrr::pmap_dbl(list(Genus=Genus,Species=Species),possibly(get_h,NA)))
+
+species <- species %>% drop_na()
+```
+View.
+```{r}
+species %>% kable(align = 'lllllr', format = 'markdown')
+```
+
+# Summarize by Atlantis group
+
+This should be done based on weights. The weight for a species here is approximated (for multi-species groups) as the proportion of the catch of that species to the total catch of the Atlantis group. Note that this is based on bottom trawl data as the data that contains most information, but this will not be great for pelagic species. It should still do a good enough job for groundfish and most Atlantis groups. See Race_biomass_makeup.Rmd for how the weights were calculated.
+```{r}
+weights <- read.csv('species_90_weights.csv')
+
+species <- species %>% rowwise() %>% mutate(Scientific.Name = paste(Genus, Species, sep = ' ')) %>%
+  mutate(Scientific.Name=str_replace(Scientific.Name,'Theragra chalcogramma','Gadus chalcogrammus'))
+
+# the 'weights' dataset includes a lot of invertebrates (and we will need those for many parameters), but the 'h' dataset only includes fish. Also, some of the fish species in 'h' are not present in the 'weights' set.
+join_weights <- weights %>% inner_join(species, by = c('Species'='Scientific.Name'))
+
+# what species are we missing from the weights if we do this?
+overlap_species <- unique(join_weights$Species)
+all_species_weights <- unique(weights$Species)
+
+missing_species <- weights %>% filter(Species %in% setdiff(all_species_weights,overlap_species)) # mostly from the weights we miss inverts and maybe a few less abundant fish species that we do not have h for - should be
+
+# write.csv(species, 'h_FishLife.csv', row.names = F)
+```
+
+Take averages, weighted.
+```{r}
+weighted_avg <- join_weights %>% group_by(Atlantis.group,Name) %>% summarise(h=weighted.mean(h,Weight))
+
+avg <- species %>% group_by(Atlantis.group,Name) %>% summarise(h=mean(h,na.rm=TRUE)) 
+
+# at quick glance, the weighted_avg values of h seem to be driven more by high biomass groups
+weighted_avg %>% kable(align = 'llr', format = 'markdown')
+
+write.csv(weighted_avg, 'h_FishLife_fg.csv', row.names = F)
+```
+
+# $R_{0}$
+
+The other bit of info we need to work out $\alpha$ and $\beta$ for the Beverton-Holt SSR equation is $R_{0}$, or some measure of maximum recruitment. For species that have a GOA stock assessment, try and pull $R_{0}$ from the RAM Legacy with the stock assessments. Those values may not be the most recent, because there is a lag between assessments and the RAM Legacy data base. 
+
+The option we have to fall back on is to use the PS approach of using ~4X estimated recruits (the youngest age class estimated by Hem's code) as $\alpah$ or $R_{0}$: 
+
+"We modeled recruitment for fish groups using Beverton-Holt dynamics: $R=\alpha S/(\beta+S)$ where R is recruits (numbers of age 0 individuals) and S is stock size (adult biomass in mg N), 𝞪 is the maximum number of recruits produced at high stock size, and β is the stock size at which recruitment is ½ 𝞪. As a starting point for calibration, we parameterize 𝞪 and β based on three assumptions 1) that steepness is 0.6 for salmon, 0.5 for rockfish, and 0.8 for all other fish. By definition, steepness is the proportion of maximum recruitment that is produced when spawning biomass is 20% of unfished spawning biomass (Mace and Doonan 1988). 2) that unfished spawning biomass is 5x current spawning biomass for all fish, and 3) that the maximum number of recruits is 3.75x current recruitment for all fish".
+
+Try with $R_{0}$ from RAM Legacy.
+```{r}
+load("RAMLDB v4.491/DB Files With Assessment Data/R Data/DBdata[asmt][v4.491].RData")
+
+ram_datasets <- c('timeseries_values_views', 'stock', 'area', 'bioparams','biometrics', 'timeseries_assessments_views',
+                  'bioparams_values_views', 'assessor', 'management', 'assessment')
+
+stock %>% select(region) %>% distinct() %>% pull()
+
+alaska_stock <- stock %>%
+  filter(region%in%c('US Alaska','US Alaska (Pacific Salmon')) 
+
+goa_stock <- alaska_stock[grep("Gulf",alaska_stock$stocklong),]
+
+goa_assessment <- assessment[grep("Gulf of Alaska",assessment$stocklong),] %>% select(assessid,stockid,stocklong,assessyear)
+
+##############################
+
+atlantis_params <- c('R0')
+
+goa_bioparams <- goa_assessment %>% left_join(bioparams, by=c('assessid','stockid','stocklong')) %>%
+  left_join(biometrics,by=c('bioid'='biounique')) %>%
+  select(stockid,stocklong,assessyear,bioid:bionotes,bioshort:biounitsshort) %>%
+  filter(bioid %in% atlantis_params)
+```
+
+None of the GOA assessments have R0 reported. We will need to pull it manually from .sso files where possible. 
