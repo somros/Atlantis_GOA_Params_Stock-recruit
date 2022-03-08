@@ -11,7 +11,7 @@ setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/da
 
 # read groups
 atlantis_fg <- read.csv('GOA_Groups.csv')
-atlantis_fg <- atlantis_fg %>% select(Code,Name,GroupType) %>% filter(GroupType=='FISH') %>% select(-GroupType)
+atlantis_fg <- atlantis_fg %>% select(Code,Name,GroupType) %>% filter(GroupType %in% c('FISH','SHARK')) %>% select(-GroupType)
 
 # read ogives
 ogive_sa <- read.csv('ogives_from_assessment.csv')
@@ -99,6 +99,12 @@ ssbr_all <- rbindlist(lapply(all_fish,get_ssbr))
 
 ssbr_all <- ssbr_all %>%
   mutate(ssbr_mgN = ssbr_g_wet * 1000 / 20 / 5.7)
+
+# add code
+
+ssbr_all <- ssbr_all %>%
+  left_join(atlantis_fg, by = c('fg'='Name')) %>%
+  select(fg,Code,ssbr_g_wet,ssbr_mgN)
 
 # write this out
 write.csv(ssbr_all,'ssbr.csv',row.names = F)

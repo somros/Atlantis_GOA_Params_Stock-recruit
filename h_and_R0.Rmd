@@ -43,8 +43,7 @@ species <- species %>% select(Atlantis.group,Name,Common.Name,Scientific.Name)
 
 species$Scientific.Name <- gsub('Gadus chalcogrammus','Theragra chalcogramma',species$Scientific.Name)
 species$Scientific.Name <- gsub('Clupea pallasii','Clupea sp.',species$Scientific.Name)
-
-
+species$Scientific.Name <- gsub('Mallotus catervarius (=villosus)','Mallotus villosus',species$Scientific.Name)
 
 # subset to entries where there is at least genus and species name. Assumes these will be the first two words in the species name column
 species <- species %>% rowwise() %>% mutate(Genus=word(Scientific.Name,1),
@@ -83,7 +82,7 @@ species <- species %>% rowwise() %>% mutate(Scientific.Name = paste(Genus, Speci
   mutate(Scientific.Name=str_replace(Scientific.Name,'Theragra chalcogramma','Gadus chalcogrammus'))
 
 # the 'weights' dataset includes a lot of invertebrates (and we will need those for many parameters), but the 'h' dataset only includes fish. Also, some of the fish species in 'h' are not present in the 'weights' set.
-join_weights <- weights %>% inner_join(species1, by = c('Species'='Scientific.Name'))
+join_weights <- weights %>% inner_join(species, by = c('Species'='Scientific.Name'))
 
 # what species are we missing from the weights if we do this?
 overlap_species <- unique(join_weights$Species)
@@ -177,6 +176,11 @@ h4 <- h3 %>%
   ungroup() %>%
   select(Name,Family,h_by_family,Order,h_by_order) %>%
   set_names(c('Atlantis group','Family','h (Family)','Order','h (Order)'))
+
+# add groiup code
+h4 <- h4 %>%
+  left_join(atlantis_groups, by = c('Atlantis group'='Name')) %>%
+  select(`Atlantis group`, Code, Family, `h (Family)`, Order, `h (Order)`)
 
 write.csv(h4,'h.csv',row.names = F)
 ```
