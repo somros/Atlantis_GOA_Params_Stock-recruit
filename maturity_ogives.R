@@ -3,13 +3,13 @@
 library(tidyverse)
 library(data.table)
 
-setwd('data/Tier 3 assessments/dat_files/')
+setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/data/Tier 3 assessments/dat_files/')
 
 list_dat <- list.files(full.names = F)
 
 # make a key with atlantis fg names
 fg <- c('Arrowtooth_flounder','Cod','Flatfish_deep','Rockfish_pelagic_shelf','Flathead_sole','Halibut','Rockfish_slope',
-        'Flatfish_shallow','Flatfish_shallow','Pollock','Pacific_ocean_perch','Rockfish_slope','Flatfish_shallow','Flatfish_shallow',
+        'Flatfish_shallow','Flatfish_shallow','Pollock','Pacific_ocean_perch','Rockfish_slope','Rex_sole','Rex_sole',
         'Sablefish','Flatfish_shallow','Flatfish_shallow')
 
 key <- data.frame('species'=substr(list_dat,1,(nchar(list_dat)-4)), 'fg'=fg)
@@ -46,3 +46,9 @@ mat_at_age %>%
 
 mat_at_age %>% write.csv('../../ogives_from_assessment.csv', row.names = F)
 
+####### pulling for spreadsheet (do not run)
+# this <- mat_at_age %>% filter(fg=='Rockfish_pelagic_shelf') %>% pull(prop) 
+# 
+# this <- c(this, rep(1,40-length(this)))
+# 
+# this <- this[(1:10)*4]
