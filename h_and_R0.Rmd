@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(data.table)
 library(FishLife)
+library(rfishbase)
 library(kableExtra)
 ```
 
@@ -41,6 +42,8 @@ species <- species %>% select(Atlantis.group,Name,Common.Name,Scientific.Name)
 # like pollock. If we flag these instances, change them manually.
 
 species$Scientific.Name <- gsub('Gadus chalcogrammus','Theragra chalcogramma',species$Scientific.Name)
+species$Scientific.Name <- gsub('Clupea pallasii','Clupea sp.',species$Scientific.Name)
+
 
 
 # subset to entries where there is at least genus and species name. Assumes these will be the first two words in the species name column
@@ -80,7 +83,7 @@ species <- species %>% rowwise() %>% mutate(Scientific.Name = paste(Genus, Speci
   mutate(Scientific.Name=str_replace(Scientific.Name,'Theragra chalcogramma','Gadus chalcogrammus'))
 
 # the 'weights' dataset includes a lot of invertebrates (and we will need those for many parameters), but the 'h' dataset only includes fish. Also, some of the fish species in 'h' are not present in the 'weights' set.
-join_weights <- weights %>% inner_join(species, by = c('Species'='Scientific.Name'))
+join_weights <- weights %>% inner_join(species1, by = c('Species'='Scientific.Name'))
 
 # what species are we missing from the weights if we do this?
 overlap_species <- unique(join_weights$Species)
@@ -103,11 +106,86 @@ weighted_avg %>% kable(align = 'llr', format = 'markdown')
 write.csv(weighted_avg, 'h_FishLife_fg.csv', row.names = F)
 ```
 
+# h at higher taxonomic level
+
+There are issues with pulling $h$ from `FishLife` by species. For example, these may be due to the fact that values of $h$ for a species may be appropriate for some stocks but not for GOA stocks. Martin thinks that values aggregated at higher taxonomic level, like those reported in Table 4 in [Thorson 2020](https://doi.org/10.1111/faf.12427) look more appropriate - although values for Gadiformes still seem off even then.
+
+Here I try to attribute to each species from the bottom trawl their Family and Order, and get values of h for each. Then summarise, take main families for the groundfish and send to Martin for review. 
+```{r, results=F, fig.show='hide'}
+get_taxon <- function(this_genus,do_family){
+  
+  if(this_genus=='Theragra'){this_genus<-'Gadus'}
+  
+  this_taxon <- load_taxa(collect = TRUE) %>% 
+    filter(Genus==this_genus) %>% 
+    pull(ifelse(isTRUE(do_family),Family,Order)) %>% 
+    unique()
+  
+  return(this_taxon)
+}
+
+family_order <- species %>%
+  rowwise() %>%
+  mutate(Family = purrr::map2(Genus, TRUE, possibly(get_taxon,NA)),
+         Order = purrr::map2(Genus, FALSE, possibly(get_taxon,NA))) %>%
+  ungroup() %>%
+  select(Genus, Species, Name, Family, Order) %>%
+  distinct() %>%
+  unnest(cols = c(Family,Order)) %>%
+  drop_na()
+
+# if the order is Perciformes/XXX change it to Perciformes
+family_order$Order <- gsub('Perciformes/.*','Perciformes',family_order$Order)
+
+# now get h for the family and then for the order
+get_h2 <- function(this_taxon, do_family){
+  
+  val <- ifelse(isTRUE(do_family), Plot_taxa( Search_species(Family = this_taxon)$match_taxonomy),
+                Plot_taxa( Search_species(Order = this_taxon)$match_taxonomy))
+  
+  h <- val[[1]]$Mean_pred[13]
+  h <- round(h,digits = 3)
+  return(h)
+}
+
+h2 <- family_order %>%
+  mutate(h_family = purrr::map2(Family,TRUE,possibly(get_h2,NA)),
+         h_order = purrr::map2(Order,FALSE,possibly(get_h2,NA))) %>%
+  unnest(cols = c(h_family,h_order))
+```
+
+Now we need to tie these back to the weights, where we can. That needs to be done at species level.
+```{r}
+h3 <- h2 %>% 
+  mutate(Scientific = paste(Genus, Species, sep=' '))
+
+# rename herring and pollock as broken in rfishbase
+h3$Scientific <- gsub('Clupea sp.','Clupea pallasii', h3$Scientific)
+h3$Scientific <- gsub('Theragra chalcogramma','Gadus chalcogrammus', h3$Scientific)
+
+h3 <- h3 %>%
+  left_join((weights %>% select(Atlantis_name, Species, Weight)), by = c('Scientific'='Species')) %>%
+  filter(!is.na(Weight)) # this drops all the rows (species) with a hit for h from fishbase but not enough biomass to be part of the 90% for the functional group. At this point it is possible that the weights will not add up to 1 if some species did not get a hit for h
+
+# group by fg, take averages with weight vector from weights
+# at this stage we will have NA's in h for sure - they should be ignored in the weights
+
+h4 <- h3 %>%
+  group_by(Name,Family,Order) %>%
+  summarise(h_by_family = round(weighted.mean(h_family,Weight,na.rm=T),3),
+            h_by_order = round(weighted.mean(h_order,Weight,na.rm=T),3)) %>%
+  ungroup() %>%
+  select(Name,Family,h_by_family,Order,h_by_order) %>%
+  set_names(c('Atlantis group','Family','h (Family)','Order','h (Order)'))
+
+write.csv(h4,'h.csv',row.names = F)
+```
+
 # $R_{0}$
 
 The other bit of info we need to work out $\alpha$ and $\beta$ for the Beverton-Holt SSR equation is $R_{0}$, or some measure of maximum recruitment. For species that have a GOA stock assessment, try and pull $R_{0}$ from the RAM Legacy with the stock assessments. Those values may not be the most recent, because there is a lag between assessments and the RAM Legacy data base. 
 
-The option we have to fall back on is to use the PS approach of using ~4X estimated recruits (the youngest age class estimated by Hem's code) as $\alpah$ or $R_{0}$: 
+The option we have to fall back on is to use the PS approach of using ~4X estimated recruits (the youngest age class estimated by Hem's code) as $\alpha$ or $R_{0}$: 
 
 "We modeled recruitment for fish groups using Beverton-Holt dynamics: $R=\alpha S/(\beta+S)$ where R is recruits (numbers of age 0 individuals) and S is stock size (adult biomass in mg N), 𝞪 is the maximum number of recruits produced at high stock size, and β is the stock size at which recruitment is ½ 𝞪. As a starting point for calibration, we parameterize 𝞪 and β based on three assumptions 1) that steepness is 0.6 for salmon, 0.5 for rockfish, and 0.8 for all other fish. By definition, steepness is the proportion of maximum recruitment that is produced when spawning biomass is 20% of unfished spawning biomass (Mace and Doonan 1988). 2) that unfished spawning biomass is 5x current spawning biomass for all fish, and 3) that the maximum number of recruits is 3.75x current recruitment for all fish".
 
