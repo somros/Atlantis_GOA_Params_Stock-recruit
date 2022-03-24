@@ -11,28 +11,20 @@ setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/da
 
 # read groups
 atlantis_fg <- read.csv('GOA_Groups.csv')
-atlantis_fg <- atlantis_fg %>% select(Code,Name,GroupType) %>% filter(GroupType %in% c('FISH','SHARK')) %>% select(-GroupType)
+atlantis_fg <- atlantis_fg %>% 
+  select(Code,Name,GroupType) %>% 
+  filter(GroupType == 'FISH') %>% # this will help us throw away SHARK, BIRD, and MAMMAL, all of whom use flagrecruit=12
+  select(-GroupType)
 
 # read ogives
 ogive_sa <- read.csv('ogives_from_assessment.csv')
-ogive_default <- read.csv('ogives_generic.csv')
-
-ogive_default <- ogive_default %>% 
-  select(atlantis_fg,value1:value45) %>%
-  left_join(atlantis_fg, by = c('atlantis_fg'='Code')) %>%
-  select(Name,value1:value45) %>%
-  pivot_longer(!Name, names_to='age', values_to='prop') %>%
-  drop_na() %>%
-  rename(fg=Name)
-
-ogive_default$age <- gsub('value','',ogive_default$age)
-ogive_default$age <- as.numeric(ogive_default$age)
+ogive_default <- read.csv('ogives_default.csv')
 
 # read biol prm
 params <- read.csv('biol_params.csv')
 
-all_fish <- unique(ogive_default$fg)
 sa_fish <- unique(ogive_sa$fg)
+all_fish <- sort(c(sa_fish, unique(ogive_default$fg)))
 
 #function to calculate Spawning Stock Biomass per Recruit (SSBR)
 # This is calculated in g wet weight of spawning biomass per recruit
@@ -105,6 +97,9 @@ ssbr_all <- ssbr_all %>%
 ssbr_all <- ssbr_all %>%
   left_join(atlantis_fg, by = c('fg'='Name')) %>%
   select(fg,Code,ssbr_g_wet,ssbr_mgN)
+
+# drop everything that is not FISH
+ssbr_all <- ssbr_all %>% drop_na()
 
 # write this out
 write.csv(ssbr_all,'ssbr.csv',row.names = F)

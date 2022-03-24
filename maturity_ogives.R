@@ -63,11 +63,11 @@ mat_at_age %>%
            theme_bw()+
            facet_wrap(~fg, scales='free')
 
-mat_at_age %>% write.csv('../../ogives_from_assessment.csv', row.names = F)
-
 # turn prop is smallest age class to 0
 mat_at_age <- mat_at_age %>% rowwise() %>%
   mutate(prop = ifelse(age==1, 0, prop))
+
+mat_at_age %>% write.csv('../../ogives_from_assessment.csv', row.names = F)
 
 ####### pulling for spreadsheet (do not run)
 # this <- mat_at_age %>% filter(fg=='Rockfish_pelagic_shelf') %>% pull(prop) 
@@ -82,6 +82,8 @@ mat_at_age <- mat_at_age %>% rowwise() %>%
 # These follow the assumption 0, 0.1, 0.5, 0.9, 1
 # where 0.5 is the age class at 50% maturity
 
+# here we need the ogives for all verts, even birds, sharks and mammals that will use flagrecruit=12.
+# we will ditch those ogives when we calculate SPR
 missing <- setdiff((atlantis_fg %>% filter(GroupType %in% c('FISH','BIRD','SHARK','MAMMAL')) %>% pull(Name)),
                    (mat_at_age %>% pull(fg) %>% unique()))
 
@@ -120,7 +122,6 @@ make_default_ogive <- function(this_fg){
   dat
 
 }
-
 
 mat_at_age_other <- rbindlist(lapply(missing, make_default_ogive))
 
