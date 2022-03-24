@@ -56,16 +56,25 @@ mat_at_age <- mat_at_age %>%
   group_by(fg,age) %>%
   summarise(prop=mean(prop,na.rm=T))
 
-mat_at_age %>%
-  ggplot(aes(x=age,y=prop))+
-           geom_point()+
-           geom_line()+
-           theme_bw()+
-           facet_wrap(~fg, scales='free')
+# turning the first ypa_FUNC elements of each ogive to 0
+# THIS EQUATES TO ASSUMING THAT YOUNGERST AGE CLASS (WHICH IN SOME CASES IS QUITE A FEW YEARS LONG) DOES NOT SPAWN, EVER
+mat_at_age <- mat_at_age %>%
+  group_by(fg) %>%
+  mutate(prop1 = c(rep(0,biol_params[biol_params$Name==fg,]$ypa_FUNC),
+                   (prop[(biol_params[biol_params$Name==fg,]$ypa_FUNC+1):length(prop)]))) %>%
+  select(-prop) %>%
+  set_names(c('fg','age','prop'))
 
 # turn prop is smallest age class to 0
 mat_at_age <- mat_at_age %>% rowwise() %>%
   mutate(prop = ifelse(age==1, 0, prop))
+
+mat_at_age %>%
+  ggplot(aes(x=age,y=prop))+
+  geom_point()+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~fg, scales='free')
 
 mat_at_age %>% write.csv('../../ogives_from_assessment.csv', row.names = F)
 
@@ -115,6 +124,7 @@ make_default_ogive <- function(this_fg){
   dat <- dat %>% drop_na()
   
   # if fish or shark make sure that age 1 has 0% inds reproducing
+  # note that this is not the same as age class 0
   if(this_fg %in% (atlantis_fg %>% filter(GroupType %in% c('FISH','SHARK')) %>% pull(Name))){
     dat[dat$age==1,]$prop <- 0
   }

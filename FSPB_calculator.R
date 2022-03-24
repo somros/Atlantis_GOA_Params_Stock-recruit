@@ -122,10 +122,9 @@ comb <- rbind(new_long, old_long)
 comb$age_class <- as.numeric(comb$age_class)
 
 comb %>%
+  drop_na() %>%
   ggplot(aes(x=age_class,y=FSPB,color=Vers))+
   geom_point()+
   geom_line()+
   theme_bw()+
   facet_wrap(~fg, scales = 'free')
-
-# basically completely unchanged, but here, now we are weighting by numbers at age...
