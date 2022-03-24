@@ -1,3 +1,4 @@
+# Alberto Rovellini 23/3/2022
 # SPR approach
 # this code calculates Spawners per recruit for each species based on:
 # max age, age of recruits, weight at age, maturity ogives, and M
