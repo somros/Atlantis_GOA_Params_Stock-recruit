@@ -1,7 +1,7 @@
 library(tidyverse)
 library(data.table)
 
-bh <- read.csv("bh_parameters_for_atlantis.csv")
+bh <- read.csv("bh_parameters_for_atlantis1.csv")
 fg <- read.csv("GOA_Groups.csv")
 
 # BHalpha is additive, is BHbeta?
@@ -66,5 +66,5 @@ p <- allbh %>% ggplot(aes(x=SSB/S0,y=R/BHalpha))+
   facet_wrap(~Name, ncol=3)
 p
 
-ggsave('bh_recruitment2.png',p,width = 7.5, height = 10)
+ggsave('bh_recruitment3.png',p,width = 7.5, height = 10)
   

@@ -9,7 +9,7 @@
 library(tidyverse)
 library(data.table)
 
-setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/data/')
+setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit_10COHORTS/data/')
 
 # read groups
 atlantis_fg <- read.csv('GOA_Groups.csv')

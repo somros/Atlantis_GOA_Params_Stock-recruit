@@ -7,7 +7,7 @@
 library(tidyverse)
 library(data.table)
 
-setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/data/')
+setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit_10COHORTS/data/')
 
 # read groups
 atlantis_groups <- read.csv('GOA_Groups.csv')
@@ -112,20 +112,22 @@ write.csv(fspb_all, '../output/FSPB_XXX.csv', row.names = F)
 
 # compare to old ogives before Martin's suggestion of weighting prop mature by the numbers at age
 
-old_fspb <- read.csv('../data/ogives_old.csv', header = F) %>%
-  left_join((atlantis_groups %>% select(Code, Name)), by = c('V1'='Code')) %>%
-  select(Name, V2:V46) %>%
-  set_names(colnames(fspb_all))
-
-new_long <- fspb_all %>% pivot_longer(cols = -fg, names_to = 'age_class', values_to = 'FSPB') %>% mutate(Vers='New')
-old_long <- old_fspb %>% pivot_longer(cols = -fg, names_to = 'age_class', values_to = 'FSPB') %>% mutate(Vers='Old')
-comb <- rbind(new_long, old_long)
-comb$age_class <- as.numeric(comb$age_class)
-
-comb %>%
-  drop_na() %>%
-  ggplot(aes(x=age_class,y=FSPB,color=Vers))+
-  geom_point()+
-  geom_line()+
-  theme_bw()+
-  facet_wrap(~fg, scales = 'free')
+# old_fspb <- read.csv('../data/ogives_old.csv', header = F) %>%
+#   left_join((atlantis_groups %>% select(Code, Name)), by = c('V1'='Code')) %>%
+#   select(Name, V2:V46) %>%
+#   set_names(c('fg',1:45))
+# 
+# new_long <- fspb_all %>% pivot_longer(cols = -fg, names_to = 'age_class', values_to = 'FSPB') %>% mutate(Vers='New')
+# old_long <- old_fspb %>% pivot_longer(cols = -fg, names_to = 'age_class', values_to = 'FSPB') %>% mutate(Vers='Old')
+# comb <- rbind(new_long, old_long)
+# comb$age_class <- as.numeric(comb$age_class)
+# 
+# comb %>%
+#   drop_na() %>%
+#   group_by(fg, Vers) %>%
+#   mutate(age_class_norm = age_class/max(age_class)) %>%
+#   ggplot(aes(x=age_class_norm,y=FSPB,color=Vers))+
+#   geom_point()+
+#   geom_line()+
+#   theme_bw()+
+#   facet_wrap(~fg, scales = 'free')

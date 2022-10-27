@@ -13,7 +13,7 @@ library(data.table)
 
 # Read data ---------------------------------------------------------------
 
-setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit/data/Tier 3 assessments/dat_files/')
+setwd('C:/Users/Alberto Rovellini/Documents/GOA/Parametrization/stock_recruit_10COHORTS/data/Tier 3 assessments/dat_files/')
 
 list_dat <- list.files(full.names = F)
 
